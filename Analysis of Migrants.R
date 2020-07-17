@@ -1,0 +1,1052 @@
+library(tidyverse)
+library(fitdistrplus)
+library(dplyr)
+library(gridExtra)
+library(grid)
+library(ggplot2)
+library(reshape2)
+migrant_df=read.csv('MissingMigrants-Global-2019-03-29T18-36-07.csv', sep=',', header=TRUE)
+
+head(migrant_df,2)
+
+
+nrow(migrant_df)
+
+migrant_df=migrant_df %>%
+  rename(WebID=ï..Web.ID)
+
+
+
+#is.na(migrant_df$Number.of.Survivors)
+
+#migrant_df$Number.of.Survivors[is.na(migrant_df$Number.of.Survivors)] =0 
+
+
+descdist(c(na.exclude(migrant_df$Number.of.Survivors)))
+
+
+descdist(c(na.exclude(migrant_df$Minimum.Estimated.Number.of.Missing)))
+
+#Convert to log - Num of survivors
+
+migrant_df$Survivors=log10((migrant_df$Number.of.Survivors)+0.1)
+
+
+
+descdist(c(na.exclude(migrant_df$Survivors)))
+fit_sur=fitdist(c(na.exclude(migrant_df$Survivors)),'norm')
+summary(fit_sur)
+par(mfrow=c(2,2))
+plot.legend=c('Norm - Num of Survivors')
+denscomp(list(fit_sur),legendtext = plot.legend,xlab='X values',xlegend='topleft')
+cdfcomp(list(fit_sur),legendtext = plot.legend,xlab='X values',xlegend='topleft')
+qqcomp(list(fit_sur),legendtext = plot.legend,xlab='X values',xlegend='topleft')
+ppcomp(list(fit_sur),legendtext = plot.legend,xlab='X values',xlegend='topleft')
+ 
+#Converting to log - missing num
+
+
+migrant_df$Missingnum=log10((migrant_df$Minimum.Estimated.Number.of.Missing)+0.1)
+
+
+descdist(c(na.exclude(migrant_df$Missingnum)))
+fit_miss=fitdist(c(na.exclude(migrant_df$Missingnum)),'norm')
+
+summary(fit_miss)
+par(mfrow=c(2,2))
+plot.legend=c('Norm - Num of missing people')
+denscomp(list(fit_miss),legendtext = plot.legend,xlab='X values',xlegend='topleft')
+cdfcomp(list(fit_miss),legendtext = plot.legend,xlab='X values',xlegend='topleft')
+qqcomp(list(fit_miss),legendtext = plot.legend,xlab='X values',xlegend='topleft')
+ppcomp(list(fit_miss),legendtext = plot.legend,xlab='X values',xlegend='topleft')
+
+
+
+
+
+
+
+
+
+#Hypothesis testing for mean number of people who survived in 2017 to those survived in 2019
+
+migrant2017 <- migrant_df %>%
+  dplyr::filter(Reported.Year=='2017')
+
+migrant2018 <- migrant_df %>%
+  dplyr::filter(Reported.Year=='2018')
+
+
+smigrant2017 <- sample_n(migrant2017,100)
+smigrant2018 <- sample_n(migrant2018,100)
+
+#H0 : mean(people who survived in 2017)=mean(people who survived in 2018)
+#H1 : means are different
+
+t.test(smigrant2017$Survivors,smigrant2018$Survivors)
+
+descdist(c(na.exclude(migrant_df$Survivors)))
+descdist(c(na.exclude(migrant_df$Missingnum)))
+
+#Hypothesis testing for mean of people missing at US Mexico border vs North africa
+
+#H0: mean of missing people at US border = mean of missing people at North africa borders
+#H1: M(US) not equal M(NA)
+
+
+
+migrant_US <- migrant_df %>%
+  dplyr::filter(Region.of.Incident=='US-Mexico Border')
+
+migrant_NA <- migrant_df %>%
+  dplyr::filter(Region.of.Incident=='North Africa')
+
+
+samUS=sample_n(migrant_US,300)
+samNA=sample_n(migrant_NA,300)
+
+
+t.test(samUS$Missingnum,samNA$Missingnum)
+
+
+
+#Hypothesis testing that  people survived in Mediterreanean region are same as those who survived in 
+#Sahara African
+
+#H0 = Mean(Surv of Medi)=Mean(Sur of Sub Sahara)
+#H1 = Mean(Surv of Medi)not =Mean(Sur of Sub Sahara)
+
+
+
+
+migrantMediterranean <- migrant_df %>%
+  dplyr::filter(Region.of.Incident=='Mediterranean')
+
+migrantSaharan <- migrant_df %>%
+  dplyr::filter(Region.of.Incident=='Sub-Saharan Africa')
+
+
+samMed=sample_n(migrantMediterranean,200)
+samSah=sample_n(migrantSaharan,200)
+
+
+t.test(samMed$Survivors,samSah$Survivors)
+
+
+#t test 
+#HO
+#mean of num of people survived in US Mexico 2015 = 2016
+#dying due lack of medicines and sickness
+
+#H1=not equal
+
+migrant_US_2016=migrant_US %>%
+  dplyr::filter(Reported.Year=='2016')
+
+migrant_US_2017=migrant_US %>%
+  dplyr::filter(Reported.Year=='2017')
+
+sam16=sample_n(migrant_US_2016,100)
+sam17=sample_n(migrant_US_2017,100)
+
+t.test(sam16$Survivors,sam17$Survivors)
+
+#PDF and CDFs
+  
+#X=RV of num of people who died at NA region per day.
+
+#2016
+migrantNA <- migrant_df %>%
+  dplyr::filter(Region.of.Incident=='North Africa')
+
+NA_D_2016<- migrantNA %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Number.Dead) %>%
+  dplyr::filter(Reported.Year=='2016') %>%
+  group_by(Reported.Date) %>%
+  summarise(NumDead1=sum(Number.Dead,na.rm=1)) %>%
+  group_by(NumDead1) %>%
+  summarise(freq1=n()) %>%
+  mutate(pmf_dead1=freq1/sum(freq1)) %>%
+  mutate(cdf_dead1=cumsum(pmf_dead1)) 
+
+
+
+#2017
+NA_D_2017<- migrantNA %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Number.Dead) %>%
+  dplyr::filter(Reported.Year=='2017') %>%
+  group_by(Reported.Date) %>%
+  summarise(NumDead2=sum(Number.Dead,na.rm=1)) %>%
+  group_by(NumDead2) %>%
+  summarise(freq2=n()) %>%
+  mutate(pmf_dead2=freq2/sum(freq2)) %>%
+  mutate(cdf_dead2=cumsum(pmf_dead2)) 
+
+
+
+#2018
+NA_D_2018<- migrantNA %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Number.Dead) %>%
+  dplyr::filter(Reported.Year=='2018') %>%
+  group_by(Reported.Date) %>%
+  summarise(NumDead3=sum(Number.Dead,na.rm=1)) %>%
+  group_by(NumDead3) %>%
+  summarise(freq3=n()) %>%
+  mutate(pmf_dead3=freq3/sum(freq3)) %>%
+  mutate(cdf_dead3=cumsum(pmf_dead3)) 
+
+
+
+#2019
+NA_D_2019<- migrantNA %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Number.Dead) %>%
+  dplyr::filter(Reported.Year=='2019') %>%
+  group_by(Reported.Date) %>%
+  summarise(NumDead4=sum(Number.Dead,na.rm=1)) %>%
+  group_by(NumDead4) %>%
+  summarise(freq4=n()) %>%
+  mutate(pmf_dead4=freq4/sum(freq4)) %>%
+  mutate(cdf_dead4=cumsum(pmf_dead4)) 
+
+
+
+
+#PMF - Dead in NA
+p1=ggplot(NA_D_2016,aes(NumDead1,pmf_dead1))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2016')
+p2=ggplot(NA_D_2017,aes(NumDead2,pmf_dead2))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2017')
+p3=ggplot(NA_D_2018,aes(NumDead3,pmf_dead3))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2018')
+p4=ggplot(NA_D_2019,aes(NumDead4,pmf_dead4))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2019')
+grid.arrange(p1,p2,p3,p4,
+             top = textGrob('PMF of North Africa - Num of deaths per day (Yearwise)'))
+
+#CDF Death in NA
+p5=ggplot(NA_D_2016,aes(NumDead1,cdf_dead1))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2016')
+p6=ggplot(NA_D_2017,aes(NumDead2,cdf_dead2))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2016')
+p7=ggplot(NA_D_2018,aes(NumDead3,cdf_dead3))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2016')
+p8=ggplot(NA_D_2019,aes(NumDead4,cdf_dead4))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2016')
+
+grid.arrange(p5,p6,p7,p8,
+             top = textGrob('CDF of North Africa - Num of deaths per day (Yearwise)'))
+
+
+#Y=RV of num of people total missing and dead per day in NA
+
+migrantNA <- migrant_df %>%
+  dplyr::filter(Region.of.Incident=='North Africa')
+
+NA_M_2016<- migrantNA %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Total.Dead.and.Missing) %>%
+  dplyr::filter(Reported.Year=='2016') %>%
+  group_by(Reported.Date) %>%
+  summarise(NumM1=sum(Total.Dead.and.Missing,na.rm=1)) %>%
+  group_by(NumM1) %>%
+  summarise(freqM1=n()) %>%
+  mutate(pmf_miss1=freqM1/sum(freqM1)) %>%
+  mutate(cdf_miss1=cumsum(pmf_miss1)) 
+
+NA_M_2017<- migrantNA %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Total.Dead.and.Missing) %>%
+  dplyr::filter(Reported.Year=='2017') %>%
+  group_by(Reported.Date) %>%
+  summarise(NumM2=sum(Total.Dead.and.Missing,na.rm=1)) %>%
+  group_by(NumM2) %>%
+  summarise(freqM2=n()) %>%
+  mutate(pmf_miss2=freqM2/sum(freqM2)) %>%
+  mutate(cdf_miss2=cumsum(pmf_miss2)) 
+
+NA_M_2018<- migrantNA %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Total.Dead.and.Missing) %>%
+  dplyr::filter(Reported.Year=='2018') %>%
+  group_by(Reported.Date) %>%
+  summarise(NumM3=sum(Total.Dead.and.Missing,na.rm=1)) %>%
+  group_by(NumM3) %>%
+  summarise(freqM3=n()) %>%
+  mutate(pmf_miss3=freqM3/sum(freqM3)) %>%
+  mutate(cdf_miss3=cumsum(pmf_miss3)) 
+
+NA_M_2019<- migrantNA %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Total.Dead.and.Missing) %>%
+  dplyr::filter(Reported.Year=='2019') %>%
+  group_by(Reported.Date) %>%
+  summarise(NumM4=sum(Total.Dead.and.Missing,na.rm=1)) %>%
+  group_by(NumM4) %>%
+  summarise(freqM4=n()) %>%
+  mutate(pmf_miss4=freqM4/sum(freqM4)) %>%
+  mutate(cdf_miss4=cumsum(pmf_miss4)) 
+
+#PMF - Tot Deaths and missing people in NorthAfrica
+
+p9=ggplot(NA_M_2016,aes(NumM1,pmf_miss1))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2016')
+p10=ggplot(NA_M_2017,aes(NumM2,pmf_miss2))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2017')
+p11=ggplot(NA_M_2018,aes(NumM3,pmf_miss3))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2018')
+p12=ggplot(NA_M_2019,aes(NumM4,pmf_miss4))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2019')
+grid.arrange(p9,p10,p11,p12,
+             top = textGrob('PMF of North Africa - Total missing and dead per day (Yearwise)'))
+
+#CDF Tot Deaths and missing people in NorthAfrica
+
+p13=ggplot(NA_M_2016,aes(NumM1,cdf_miss1))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2016')
+p14=ggplot(NA_M_2017,aes(NumM2,cdf_miss2))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2017')
+p15=ggplot(NA_M_2018,aes(NumM3,cdf_miss3))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2018')
+p16=ggplot(NA_M_2019,aes(NumM4,cdf_miss4))+
+  geom_bar(stat='identity',fill='blue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2019')
+grid.arrange(p13,p14,p15,p16,
+             top = textGrob('CDF of North Africa - Total missing and dead per day (Yearwise)'))
+
+
+
+#Y=RV of num of people who died at US-Mexico region per day
+
+migrantUS <- migrant_df %>%
+  dplyr::filter(Region.of.Incident=='US-Mexico Border')
+
+US_D_2016<- migrantUS %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Number.Dead) %>%
+  dplyr::filter(Reported.Year=='2016') %>%
+  group_by(Reported.Date) %>%
+  summarise(NumDeadU1=sum(Number.Dead,na.rm=1)) %>%
+  group_by(NumDeadU1) %>%
+  summarise(freqU1=n()) %>%
+  mutate(pmf_deadU1=freqU1/sum(freqU1)) %>%
+  mutate(cdf_deadU1=cumsum(pmf_deadU1)) 
+
+US_D_2017<- migrantUS %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Number.Dead) %>%
+  dplyr::filter(Reported.Year=='2017') %>%
+  group_by(Reported.Date) %>%
+  summarise(NumDeadU2=sum(Number.Dead,na.rm=1)) %>%
+  group_by(NumDeadU2) %>%
+  summarise(freqU2=n()) %>%
+  mutate(pmf_deadU2=freqU2/sum(freqU2)) %>%
+  mutate(cdf_deadU2=cumsum(pmf_deadU2)) 
+
+US_D_2018<- migrantUS %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Number.Dead) %>%
+  dplyr::filter(Reported.Year=='2018') %>%
+  group_by(Reported.Date) %>%
+  summarise(NumDeadU3=sum(Number.Dead,na.rm=1)) %>%
+  group_by(NumDeadU3) %>%
+  summarise(freqU3=n()) %>%
+  mutate(pmf_deadU3=freqU3/sum(freqU3)) %>%
+  mutate(cdf_deadU3=cumsum(pmf_deadU3)) 
+
+US_D_2019<- migrantUS %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Number.Dead) %>%
+  dplyr::filter(Reported.Year=='2019') %>%
+  group_by(Reported.Date) %>%
+  summarise(NumDeadU4=sum(Number.Dead,na.rm=1)) %>%
+  group_by(NumDeadU4) %>%
+  summarise(freqU4=n()) %>%
+  mutate(pmf_deadU4=freqU4/sum(freqU4)) %>%
+  mutate(cdf_deadU4=cumsum(pmf_deadU4)) 
+
+#PMF US Mex deaths
+
+u1=ggplot(US_D_2016,aes(NumDeadU1,pmf_deadU1))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2016')
+u2=ggplot(US_D_2017,aes(NumDeadU2,pmf_deadU2))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2017')
+u3=ggplot(US_D_2018,aes(NumDeadU3,pmf_deadU3))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2018')
+u4=ggplot(US_D_2019,aes(NumDeadU4,pmf_deadU4))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2019')
+
+grid.arrange(u1,u2,u3,u4,
+             top = textGrob('PMF of US Mexico region - Num of deaths per day (Yearwise)'))
+
+#CDF US Mexico deaths
+
+u5=ggplot(US_D_2016,aes(NumDeadU1,cdf_deadU1))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2016')
+u6=ggplot(US_D_2017,aes(NumDeadU2,cdf_deadU2))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2017')
+u7=ggplot(US_D_2018,aes(NumDeadU3,cdf_deadU3))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2018')
+u8=ggplot(US_D_2019,aes(NumDeadU4,cdf_deadU4))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2019')
+
+grid.arrange(u5,u6,u7,u8,
+             top = textGrob('CDF of US Mexico region - Num of deaths per day (Yearwise)'))
+
+
+#RV of total num of missing and deaths around US Mexico
+
+
+US_M_2016<- migrantUS %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Total.Dead.and.Missing) %>%
+  dplyr::filter(Reported.Year=='2016') %>%
+  group_by(Reported.Date) %>%
+  summarise(NummissU1=sum(Total.Dead.and.Missing,na.rm=1)) %>%
+  group_by(NummissU1) %>%
+  summarise(freqmU1=n()) %>%
+  mutate(pmf_deadmU1=freqmU1/sum(freqmU1)) %>%
+  mutate(cdf_deadmU1=cumsum(pmf_deadmU1)) 
+
+US_M_2017<- migrantUS %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Total.Dead.and.Missing) %>%
+  dplyr::filter(Reported.Year=='2017') %>%
+  group_by(Reported.Date) %>%
+  summarise(NummissU2=sum(Total.Dead.and.Missing,na.rm=1)) %>%
+  group_by(NummissU2) %>%
+  summarise(freqmU2=n()) %>%
+  mutate(pmf_deadmU2=freqmU2/sum(freqmU2)) %>%
+  mutate(cdf_deadmU2=cumsum(pmf_deadmU2))
+
+US_M_2018<- migrantUS %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Total.Dead.and.Missing) %>%
+  dplyr::filter(Reported.Year=='2018') %>%
+  group_by(Reported.Date) %>%
+  summarise(NummissU3=sum(Total.Dead.and.Missing,na.rm=1)) %>%
+  group_by(NummissU3) %>%
+  summarise(freqmU3=n()) %>%
+  mutate(pmf_deadmU3=freqmU3/sum(freqmU3)) %>%
+  mutate(cdf_deadmU3=cumsum(pmf_deadmU3))
+
+US_M_2019<- migrantUS %>%
+  dplyr::select(Region.of.Incident,Reported.Year,Reported.Date,Reported.Month,Total.Dead.and.Missing) %>%
+  dplyr::filter(Reported.Year=='2019') %>%
+  group_by(Reported.Date) %>%
+  summarise(NummissU4=sum(Total.Dead.and.Missing,na.rm=1)) %>%
+  group_by(NummissU4) %>%
+  summarise(freqmU4=n()) %>%
+  mutate(pmf_deadmU4=freqmU4/sum(freqmU4)) %>%
+  mutate(cdf_deadmU4=cumsum(pmf_deadmU4))
+
+
+#PMF Deaths and missing US Mexico
+u9=ggplot(US_M_2016,aes(NummissU1,pmf_deadmU1))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2016')
+u10=ggplot(US_M_2017,aes(NummissU2,pmf_deadmU2))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2017')
+u11=ggplot(US_M_2018,aes(NummissU3,pmf_deadmU3))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2018')
+u12=ggplot(US_M_2019,aes(NummissU4,pmf_deadmU4))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2019')
+
+grid.arrange(u9,u10,u11,u12,
+             top = textGrob('PMF of US Mexico region - Total deaths and missing per day (Yearwise)'))
+
+#CDF deaths and missing US Mexico
+
+u13=ggplot(US_M_2016,aes(NummissU1,cdf_deadmU1))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2016')
+u14=ggplot(US_M_2017,aes(NummissU2,cdf_deadmU2))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2017')
+u15=ggplot(US_M_2018,aes(NummissU3,cdf_deadmU3))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2018')
+u16=ggplot(US_M_2019,aes(NummissU4,cdf_deadmU4))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Number of People',y='Probability')+
+  ggtitle('2019')
+
+grid.arrange(u13,u14,u15,u16,
+             top = textGrob('CDF of US Mexico region - Total deaths and missing per day (Yearwise)'))
+
+
+
+
+#Correlation between 2016 and 2017 deaths [1:6] at US Mexico border
+
+
+co1=cor.test(head(US_M_2016$freqmU1,6),head(US_M_2017$freqmU2,6))
+co1
+
+#Correlation between 2017 and 2018 deaths [1:6] at US Mexico border
+
+co2=cor.test(head(US_M_2017$freqmU2,6),head(US_M_2018$freqmU3,6))
+co2
+
+#Correlation between 2017 US Mexico deaths vs North Africa
+
+co_US_NA2=cor.test(head(US_M_2017$freqmU2,6),head(NA_M_2017$freqM2,6))
+co_US_NA2
+
+#Visualising causes if deaths at North Africa
+migrant_NA_cau <-migrant_NA %>%
+  dplyr::select(Reported.Year,Cause.of.Death,Number.Dead) %>%
+  group_by(Reported.Year,Cause.of.Death) %>%
+  summarise(s=sum(Number.Dead,na.rm=1))
+   
+
+na2016=migrant_NA_cau %>%
+  dplyr::filter(Reported.Year==2016)
+na2017=migrant_NA_cau %>%
+  dplyr::filter(Reported.Year==2017)
+na2018=migrant_NA_cau %>%
+  dplyr::filter(Reported.Year==2018)
+na2019=migrant_NA_cau %>%
+  dplyr::filter(Reported.Year==2019)
+
+na2016=head(na2016[order(na2016$s,decreasing=TRUE),],4)
+na2017=head(na2017[order(na2017$s,decreasing=TRUE),],4)
+na2018=head(na2018[order(na2018$s,decreasing=TRUE),],4)
+na2019=head(na2019[order(na2019$s,decreasing=TRUE),],4)
+
+
+n1=ggplot(na2016,aes(Cause.of.Death,s))+
+  geom_bar(stat='identity',fill='red')
+n2=ggplot(na2017,aes(Cause.of.Death,s))+
+  geom_bar(stat='identity',fill='red')
+n3=ggplot(na2018,aes(Cause.of.Death,s))+
+  geom_bar(stat='identity',fill='red')
+n4=ggplot(na2019,aes(Cause.of.Death,s))+
+  geom_bar(stat='identity',fill='red')
+
+grid.arrange(n1,n2,n3,n4 ,
+             top = textGrob('Causes of deaths at North Africa'))
+  
+n1=ggplot(na2016,aes(x=2,s,fill=Cause.of.Death))+
+  geom_bar(width=1,stat='identity')+
+  ggtitle('2016')+
+  coord_polar("y",start=0)+
+  theme_void()+
+  xlim(0.5,2.5)
+
+n2=ggplot(na2017,aes(x=2,s,fill=Cause.of.Death))+
+  geom_bar(width=1,stat='identity')+
+  ggtitle('2017')+
+  coord_polar("y",start=0)+
+  theme_void()+
+  xlim(0.5,2.5)
+
+n3=ggplot(na2018,aes(x=2,s,fill=Cause.of.Death))+
+  geom_bar(width=1,stat='identity')+
+  ggtitle('2018')+
+  coord_polar("y",start=0)+
+  theme_void()+
+  xlim(0.5,2.5)
+
+n4=ggplot(na2019,aes(x=2,s,fill=Cause.of.Death))+
+  geom_bar(width=1,stat='identity')+
+  ggtitle('2019')+
+  coord_polar("y",start=0)+
+  theme_void()+
+  xlim(0.5,2.5)
+
+ggplot(na2019,aes(x=2,s,fill=Cause.of.Death))+
+  geom_bar(width=1,stat='identity')+
+  ggtitle('2019')+
+  coord_polar("y",start=0)+
+  theme_void()+
+  xlim(0.5,2.5)
+
+grid.arrange(n1,n2,n3,n4 ,
+             top = textGrob('Causes of deaths at North Africa'))
+
+#Visualising causes of deaths at Mediterrean
+
+migrant_M=migrant_df %>%
+  dplyr::filter(Region.of.Incident=='Mediterranean')
+
+migrant_M_cau <-migrant_M %>%
+  dplyr::select(Reported.Year,Cause.of.Death,Number.Dead) %>%
+  group_by(Reported.Year,Cause.of.Death) %>%
+  summarise(s=sum(Number.Dead,na.rm=1))
+
+
+m2016=migrant_M_cau %>%
+  dplyr::filter(Reported.Year==2016)
+m2017=migrant_M_cau %>%
+  dplyr::filter(Reported.Year==2017)
+m2018=migrant_M_cau %>%
+  dplyr::filter(Reported.Year==2018)
+m2019=migrant_M_cau %>%
+  dplyr::filter(Reported.Year==2019)
+
+m2016=head(m2016[order(m2016$s,decreasing=TRUE),],4)
+m2017=head(m2017[order(m2017$s,decreasing=TRUE),],4)
+m2018=head(m2018[order(m2018$s,decreasing=TRUE),],4)
+m2019=head(m2019[order(m2019$s,decreasing=TRUE),],4)
+
+
+m1=ggplot(m2016,aes(x=2,s,fill=Cause.of.Death))+
+  geom_bar(width=1,stat='identity')+
+  ggtitle('2016')+
+  coord_polar("y",start=0)+
+  theme_void()+
+  xlim(0.5,2.5)
+
+m2=ggplot(m2017,aes(x=2,s,fill=Cause.of.Death))+
+  geom_bar(width=1,stat='identity')+
+  ggtitle('2017')+
+  coord_polar("y",start=0)+
+  theme_void()+
+  xlim(0.5,2.5)
+
+m3=ggplot(m2018,aes(x=2,s,fill=Cause.of.Death))+
+  geom_bar(width=1,stat='identity')+
+  ggtitle('2018')+
+  coord_polar("y",start=0)+
+  theme_void()+
+  xlim(0.5,2.5)
+
+m4=ggplot(m2019,aes(x=2,s,fill=Cause.of.Death))+
+  geom_bar(width=1,stat='identity')+
+  ggtitle('2019')+
+  coord_polar("y",start=0)+
+  theme_void()+
+  xlim(0.5,2.5)
+
+grid.arrange(m1,m2,m3,m4 ,
+             top = textGrob('Causes of deaths at Mediterranen'))
+
+#Visualising death causes at US Mexico
+
+migrant_US_cau <-migrant_US %>%
+  dplyr::select(Reported.Year,Cause.of.Death,Number.Dead) %>%
+  group_by(Reported.Year,Cause.of.Death) %>%
+  summarise(s=sum(Number.Dead,na.rm=1))
+
+
+us2016=migrant_US_cau %>%
+  dplyr::filter(Reported.Year==2016)
+us2017=migrant_US_cau %>%
+  dplyr::filter(Reported.Year==2017)
+us2018=migrant_US_cau %>%
+  dplyr::filter(Reported.Year==2018)
+us2019=migrant_US_cau %>%
+  dplyr::filter(Reported.Year==2019)
+
+us2016=head(us2016[order(us2016$s,decreasing=TRUE),],4)
+us2017=head(us2017[order(us2017$s,decreasing=TRUE),],4)
+us2018=head(us2018[order(us2018$s,decreasing=TRUE),],4)
+us2019=head(us2019[order(us2019$s,decreasing=TRUE),],4)
+
+
+uc1=ggplot(us2016,aes(x=2,s,fill=Cause.of.Death))+
+  geom_bar(width=1,stat='identity')+
+  ggtitle('2016')+
+  coord_polar("y",start=0)+
+  theme_void()+
+  xlim(0.5,2.5)
+
+uc2=ggplot(us2017,aes(x=2,s,fill=Cause.of.Death))+
+  geom_bar(width=1,stat='identity')+
+  ggtitle('2017')+
+  coord_polar("y",start=0)+
+  theme_void()+
+  xlim(0.5,2.5)
+
+uc3=ggplot(us2018,aes(x=2,s,fill=Cause.of.Death))+
+  geom_bar(width=1,stat='identity')+
+  ggtitle('2018')+
+  coord_polar("y",start=0)+
+  theme_void()+
+  xlim(0.5,2.5)
+
+uc4=ggplot(us2019,aes(x=2,s,fill=Cause.of.Death))+
+  geom_bar(width=1,stat='identity')+
+  ggtitle('2019')+
+  coord_polar("y",start=0)+
+  theme_void()+
+  xlim(0.5,2.5)
+
+grid.arrange(uc1,uc2,uc3,uc4 ,
+             top = textGrob('Causes of deaths at US Mexico Border'))
+
+#Visualing the number of incidents on different regions
+
+
+m_reg <- migrant_df %>%
+  dplyr::select(WebID,Reported.Year,Region.of.Incident) %>%
+  group_by(Reported.Year,Region.of.Incident) %>%
+  summarise(count=n())
+
+m_reg2016 <- m_reg %>%
+  dplyr::filter(Reported.Year==2016)
+m_reg2017 <- m_reg %>%
+  dplyr::filter(Reported.Year==2017)
+m_reg2018 <- m_reg %>%
+  dplyr::filter(Reported.Year==2018)
+m_reg2019 <- m_reg %>%
+  dplyr::filter(Reported.Year==2019)
+
+
+m_reg2016=head(m_reg[order(m_reg2016$count,decreasing = TRUE),],6)
+m_reg2017=head(m_reg[order(m_reg2017$count,decreasing = TRUE),],6)
+m_reg2018=head(m_reg[order(m_reg2018$count,decreasing = TRUE),],6)
+m_reg2019=head(m_reg[order(m_reg2019$count,decreasing = TRUE),],6)
+
+
+mreg16=ggplot(m_reg2016,aes(Region.of.Incident,count))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Regions of incident',y='Count')+
+  ggtitle('2016')
+mreg17=ggplot(m_reg2017,aes(Region.of.Incident,count))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Regions of incident',y='Count')+
+  ggtitle('2017')
+mreg18=ggplot(m_reg2018,aes(Region.of.Incident,count))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Regions of incident',y='Count')+
+  ggtitle('2018')
+mreg19=ggplot(m_reg2019,aes(Region.of.Incident,count))+
+  geom_bar(stat='identity',fill='steelblue')+
+  labs(x='Regions of incident',y='Count')+
+  ggtitle('2019')
+
+grid.arrange(mreg16,mreg17,mreg18,mreg19 ,
+             top = textGrob('Yearwise number of incidents'))
+
+
+#Visualising num of deaths per year
+
+mg_d_US <- migrant_US %>%
+  dplyr::filter(Reported.Year,Number.Dead) %>%
+  group_by(Reported.Year) %>%
+  summarise(s=sum(Number.Dead))
+
+mg_d_M <- migrant_M %>%
+  dplyr::filter(Reported.Year,Number.Dead) %>%
+  group_by(Reported.Year) %>%
+  summarise(s=sum(Number.Dead))
+
+mg_d_NA <- migrant_NA %>%
+  dplyr::filter(Reported.Year,Number.Dead) %>%
+  group_by(Reported.Year) %>%
+  summarise(s=sum(Number.Dead))
+
+mg_d_SA <- migrantSaharan %>%
+  dplyr::filter(Reported.Year,Number.Dead) %>%
+  group_by(Reported.Year) %>%
+  summarise(s=sum(Number.Dead))
+
+
+mgd1=ggplot(mg_d_US,aes(Reported.Year,s))+
+  geom_line(color='red')+
+  labs(x='Year',y='Number of deaths')+
+  ggtitle('US Mexico Border')+
+  theme(plot.title = element_text(size = 10))
+
+mgd2=ggplot(mg_d_NA,aes(Reported.Year,s))+
+  geom_line(color='red')+
+  labs(x='Year',y='Number of deaths')+
+  ggtitle('North Africa')+
+  theme(plot.title = element_text(size = 10))
+
+mgd3=ggplot(mg_d_SA,aes(Reported.Year,s))+
+  geom_line(color='red')+
+  labs(x='Year',y='Number of deaths')+
+  ggtitle('SubSaharan Africa')+
+  theme(plot.title = element_text(size = 10))
+
+mgd4=ggplot(mg_d_M,aes(Reported.Year,s))+
+  geom_line(color='red')+
+  labs(x='Year',y='Number of deaths')+
+  ggtitle('Mediterranean')+
+  theme(plot.title = element_text(size = 10))
+
+grid.arrange(mgd1,mgd2,mgd3,mgd4 ,
+             top = textGrob('Yearwise number of deaths',gp=gpar(fontsize=15)))
+
+
+#Visualising num of males to females died at different regions
+
+FM_NA <-migrant_NA %>%
+  dplyr::select(Reported.Year,Number.of.Males,Number.of.Females) %>%
+  group_by(Reported.Year) %>%
+  summarise(Male=sum(Number.of.Males,na.rm=1),Female=sum(Number.of.Females,na.rm=1))   
+
+
+x=melt(FM_NA,id=c(1),measure=c(2:3))
+
+
+mf1=ggplot(x,aes(x=Reported.Year,y=value,fill=variable)) + 
+  geom_bar(position = 'dodge',stat='identity')+
+  labs(x='Year',y='Num of Deaths')+
+  ggtitle('North Africa')+
+  theme(plot.title = element_text(size = 10))
+
+#Mediterranean
+FM_M <-migrant_M %>%
+  dplyr::select(Reported.Year,Number.of.Males,Number.of.Females) %>%
+  group_by(Reported.Year) %>%
+  summarise(Male=sum(Number.of.Males,na.rm=1),Female=sum(Number.of.Females,na.rm=1))   
+
+
+x1=melt(FM_M,id=c(1),measure=c(2:3))
+
+
+mf2=ggplot(x1,aes(x=Reported.Year,y=value,fill=variable)) + 
+  geom_bar(position = 'dodge',stat='identity')+
+  labs(x='Year',y='Num of Deaths')+
+  ggtitle('Mediterranean')+
+  theme(plot.title = element_text(size = 10))
+
+#US Mexico Border
+
+FM_U <-migrant_US %>%
+  dplyr::select(Reported.Year,Number.of.Males,Number.of.Females) %>%
+  group_by(Reported.Year) %>%
+  summarise(Male=sum(Number.of.Males,na.rm=1),Female=sum(Number.of.Females,na.rm=1))   
+
+
+x2=melt(FM_U,id=c(1),measure=c(2:3))
+
+
+mf3=ggplot(x2,aes(x=Reported.Year,y=value,fill=variable)) + 
+  geom_bar(position = 'dodge',stat='identity')+
+  labs(x='Year',y='Num of Deaths')+
+  ggtitle('US Mexico Border')+
+  theme(plot.title = element_text(size = 10))
+
+#Sub Saharan -
+
+FM_SA <-migrantSaharan %>%
+  dplyr::select(Reported.Year,Number.of.Males,Number.of.Females) %>%
+  group_by(Reported.Year) %>%
+  summarise(Male=sum(Number.of.Males,na.rm=1),Female=sum(Number.of.Females,na.rm=1))   
+
+
+x3=melt(FM_SA,id=c(1),measure=c(2:3))
+
+
+mf4=ggplot(x3,aes(x=Reported.Year,y=value,fill=variable)) + 
+  geom_bar(position = 'dodge',stat='identity')+
+  labs(x='Year',y='Num of Deaths')+
+  ggtitle('SubSaharan Africa')+
+  theme(plot.title = element_text(size = 10))
+
+
+grid.arrange(mf1,mf2,mf3,mf4 ,
+             top = textGrob('Comparison of Male/Female Deaths',gp=gpar(fontsize=15)))
+
+
+#######################################################
+library(mapview)
+df = read.csv("MissingMigrants-Global-2019-03-29T18-36-07.csv",header = TRUE,# the dataset has header columns
+              sep = ',')
+
+#north america
+df_NA<- df %>%
+  dplyr::filter(Region.of.Incident=='US-Mexico Border')
+
+df_NA$lan <- str_replace(str_extract(df_NA$Location.Coordinates, ".*,"), ",", "")
+df_NA$lon <- str_trim(str_replace(str_extract(df_NA$Location.Coordinates, ",.*"), ",", ""))
+df_NA$lon <- as.numeric(df_NA$lon)
+df_NA$lan<- as.numeric(df_NA$lan)
+
+US_Mexico_Border <- df_NA[, c('lan','lon')]
+
+# There cannot be any missings before transformation
+US_Mexico_Border[is.na(US_Mexico_Border$lan), 'lan'] <- 0
+US_Mexico_Border[is.na(US_Mexico_Border$lon), 'lon'] <- 0
+
+# We convert an object st as sf, which is needed for later operations
+US_Mexico_Border <- sf::st_as_sf(US_Mexico_Border, coords=c("lon","lan"), crs=4326)
+
+
+mapview(US_Mexico_Border)
+
+###################
+df_M<- df %>%
+  dplyr::filter(Region.of.Incident=='Mediterranean')
+
+df_M$lan <- str_replace(str_extract(df_M$Location.Coordinates, ".*,"), ",", "")
+df_M$lon <- str_trim(str_replace(str_extract(df_M$Location.Coordinates, ",.*"), ",", ""))
+df_M$lon <- as.numeric(df_M$lon)
+df_M$lan<- as.numeric(df_M$lan)
+
+Mediterrranean <- df_M[, c('lan','lon')]
+
+# There cannot be any missings before transformation
+Mediterrranean[is.na(Mediterrranean$lan), 'lan'] <- 0
+Mediterrranean[is.na(Mediterrranean$lon), 'lon'] <- 0
+
+# We convert an object st as sf, which is needed for later operations
+Mediterrranean <- sf::st_as_sf(Mediterrranean, coords=c("lon","lan"), crs=4326)
+
+
+mapview(Mediterrranean)
+
+######################
+#sub-saharan Africa
+
+
+df_sub_saharan_Africa<- df %>%
+  dplyr::filter(Region.of.Incident=='Sub-Saharan Africa')
+
+df_sub_saharan_Africa$lan <- str_replace(str_extract(df_sub_saharan_Africa$Location.Coordinates, ".*,"), ",", "")
+df_sub_saharan_Africa$lon <- str_trim(str_replace(str_extract(df_sub_saharan_Africa$Location.Coordinates, ",.*"), ",", ""))
+df_sub_saharan_Africa$lon <- as.numeric(df_sub_saharan_Africa$lon)
+df_sub_saharan_Africa$lan<- as.numeric(df_sub_saharan_Africa$lan)
+
+Sub_saharan_Africa <- df_sub_saharan_Africa[, c('lan','lon')]
+
+# There cannot be any missings before transformation
+Sub_saharan_Africa[is.na(Sub_saharan_Africa$lan), 'lan'] <- 0
+Sub_saharan_Africa[is.na(Sub_saharan_Africa$lon), 'lon'] <- 0
+
+# We convert an object st as sf, which is needed for later operations
+Sub_saharan_Africa <- sf::st_as_sf(Sub_saharan_Africa, coords=c("lon","lan"), crs=4326)
+
+
+mapview(Sub_saharan_Africa)
+
+#########################
+
+#NorthAfrica
+
+df_sub_north_Africa<- df %>%
+  dplyr::filter(Region.of.Incident=='North Africa')
+
+df_sub_north_Africa$lan <- str_replace(str_extract(df_sub_north_Africa$Location.Coordinates, ".*,"), ",", "")
+df_sub_north_Africa$lon <- str_trim(str_replace(str_extract(df_sub_north_Africa$Location.Coordinates, ",.*"), ",", ""))
+df_sub_north_Africa$lon <- as.numeric(df_sub_north_Africa$lon)
+df_sub_north_Africa$lan<- as.numeric(df_sub_north_Africa$lan)
+
+North_Africa <- df_sub_north_Africa[, c('lan','lon')]
+
+# There cannot be any missings before transformation
+North_Africa[is.na(North_Africa$lan), 'lan'] <- 0
+North_Africa[is.na(North_Africa$lon), 'lon'] <- 0
+
+# We convert an object st as sf, which is needed for later operations
+North_Africa <- sf::st_as_sf(North_Africa, coords=c("lon","lan"), crs=4326)
+
+
+mapview(North_Africa)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
